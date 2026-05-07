@@ -22,6 +22,8 @@ KOKSHETAU_CONFIG = KrishaCityConfig(
     city_slug="kokshetau",
     source_name="krisha_kokshetau_head",
     max_pages=200,
+    min_delay=4.0,
+    max_delay=9.0,
 )
 
 

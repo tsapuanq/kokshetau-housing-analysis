@@ -32,30 +32,40 @@ class KrishaHeadParser:
         all_records: list[dict[str, Any]] = []
         pages_parsed = 0
         records_failed = 0
+        stop_reason = "max_pages_reached"
 
         try:
             for page_number in range(1, self.config.max_pages + 1):
-                page_url = self.http_client.build_page_url(page_number)
-                html = self.http_client.fetch_html(page_url)
+                try:
+                    page_url = self.http_client.build_page_url(page_number)
+                    html = self.http_client.fetch_html(page_url)
 
-                if html is None:
-                    logger.warning("No HTML for page=%s", page_number)
+                    if html is None:
+                        logger.warning("No HTML for page=%s", page_number)
+                        records_failed += 1
+                        stop_reason = f"fetch_failed_page_{page_number}"
+                        break
+
+                    records = self.extractor.parse_listing_page(
+                        html=html,
+                        source_url=page_url,
+                        page_number=page_number,
+                        run_id=run_id,
+                    )
+
+                    if not records:
+                        logger.info("No records found on page=%s. Stopping successfully.", page_number)
+                        stop_reason = f"empty_page_{page_number}"
+                        break
+
+                    all_records.extend(records)
+                    pages_parsed += 1
+
+                except Exception:
+                    logger.exception("Page failed page=%s. Saving collected records.", page_number)
                     records_failed += 1
-                    continue
-
-                records = self.extractor.parse_listing_page(
-                    html=html,
-                    source_url=page_url,
-                    page_number=page_number,
-                    run_id=run_id,
-                )
-
-                if not records:
-                    logger.info("No records found on page=%s. Stopping.", page_number)
+                    stop_reason = f"page_failed_{page_number}"
                     break
-
-                all_records.extend(records)
-                pages_parsed += 1
 
             quality_report = validate_records(all_records)
 
@@ -66,10 +76,11 @@ class KrishaHeadParser:
                 logger.warning("Validation issues found: %s", quality_report["issues_count"])
 
             inserted, updated = self.storage.save_records(all_records)
+            status = "success" if records_failed == 0 else "partial_success"
 
             self.storage.finish_parse_run(
                 run_id=run_id,
-                status="success",
+                status=status,
                 pages_parsed=pages_parsed,
                 records_found=len(all_records),
                 records_inserted=inserted,
@@ -78,8 +89,10 @@ class KrishaHeadParser:
             )
 
             logger.info(
-                "Done. run_id=%s records=%s inserted=%s updated=%s",
+                "Done. run_id=%s status=%s stop_reason=%s records=%s inserted=%s updated=%s",
                 run_id,
+                status,
+                stop_reason,
                 len(all_records),
                 inserted,
                 updated,
