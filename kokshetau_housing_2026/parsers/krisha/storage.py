@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 from supabase import Client, create_client
 
@@ -71,7 +72,24 @@ def get_supabase_client() -> Client:
     if not url or not key:
         raise ValueError("SUPABASE_URL or SUPABASE_KEY is missing in .env")
 
+    validate_supabase_api_url(url)
+
     return create_client(url, key)
+
+
+def validate_supabase_api_url(url: str) -> None:
+    parsed = urlparse(url)
+
+    if parsed.scheme in ("postgres", "postgresql"):
+        raise ValueError(
+            "SUPABASE_URL must be the Supabase API URL, not the Postgres connection string. "
+            "Use https://<project-ref>.supabase.co for SUPABASE_URL."
+        )
+
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError(
+            "SUPABASE_URL must be a valid URL like https://<project-ref>.supabase.co"
+        )
 
 
 class KrishaStorage:
