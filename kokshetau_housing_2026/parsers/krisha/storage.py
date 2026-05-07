@@ -8,6 +8,9 @@ from supabase import Client, create_client
 from .config import KrishaCityConfig
 from .time_utils import utc_now_iso
 
+EXISTING_ADS_BATCH_SIZE = 200
+INSERT_BATCH_SIZE = 200
+
 
 def load_environment() -> None:
     try:
@@ -137,17 +140,18 @@ class KrishaStorage:
         if not records:
             return 0, 0
 
-        ad_ids = [record["ad_id"] for record in records if record.get("ad_id")]
+        unique_records = deduplicate_records_by_ad_id(records)
+        ad_ids = [record["ad_id"] for record in unique_records if record.get("ad_id")]
         existing_ads = self.get_existing_ads(ad_ids)
 
-        insert_records, update_records = split_insert_update_records(records, existing_ads)
+        insert_records, update_records = split_insert_update_records(unique_records, existing_ads)
 
         inserted = 0
         updated = 0
 
-        if insert_records:
-            self.supabase.table("raw_head_krisha").insert(insert_records).execute()
-            inserted = len(insert_records)
+        for batch in chunked(insert_records, INSERT_BATCH_SIZE):
+            self.supabase.table("raw_head_krisha").insert(batch).execute()
+            inserted += len(batch)
 
         for record in update_records:
             ad_id = record["ad_id"]
@@ -160,18 +164,43 @@ class KrishaStorage:
         if not ad_ids:
             return {}
 
-        response = (
-            self.supabase
-            .table("raw_head_krisha")
-            .select("ad_id, first_seen_at")
-            .in_("ad_id", ad_ids)
-            .execute()
-        )
+        existing_ads = {}
 
-        return {
-            row["ad_id"]: row
-            for row in response.data
-        }
+        for batch in chunked(ad_ids, EXISTING_ADS_BATCH_SIZE):
+            response = (
+                self.supabase
+                .table("raw_head_krisha")
+                .select("ad_id, first_seen_at")
+                .in_("ad_id", batch)
+                .execute()
+            )
+
+            existing_ads.update({
+                row["ad_id"]: row
+                for row in response.data
+            })
+
+        return existing_ads
+
+
+def chunked(items: list[Any], batch_size: int) -> list[list[Any]]:
+    return [
+        items[index:index + batch_size]
+        for index in range(0, len(items), batch_size)
+    ]
+
+
+def deduplicate_records_by_ad_id(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    unique_records = {}
+
+    for record in records:
+        ad_id = record.get("ad_id")
+        if not ad_id:
+            continue
+
+        unique_records[ad_id] = record
+
+    return list(unique_records.values())
 
 
 def split_insert_update_records(
