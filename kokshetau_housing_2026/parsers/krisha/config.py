@@ -21,6 +21,7 @@ KOKSHETAU_CONFIG = KrishaCityConfig(
     city_name="Кокшетау",
     city_slug="kokshetau",
     source_name="krisha_kokshetau_head",
+    max_pages=200,
 )
 
 
@@ -79,4 +80,3 @@ DDL_COLUMNS = [
     "parsed_at",
     "updated_at",
 ]
-
