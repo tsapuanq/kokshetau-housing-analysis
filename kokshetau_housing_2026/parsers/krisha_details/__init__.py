@@ -1,0 +1,2 @@
+"""Krisha detail parser package."""
+
