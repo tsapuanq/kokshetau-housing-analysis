@@ -98,3 +98,69 @@ create table if not exists raw_head_krisha (
     parsed_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
+
+
+
+
+
+CREATE TABLE IF NOT EXISTS raw_krisha_details (
+    ad_id BIGINT PRIMARY KEY,
+    uuid TEXT,
+
+    detail_url TEXT NOT NULL,
+    source_url TEXT,
+
+    title TEXT,
+    description TEXT,
+    price_kzt BIGINT,
+    price_m2 BIGINT,
+    status TEXT,
+
+    rooms INTEGER,
+    area_m2 NUMERIC(10, 2),
+    floor INTEGER,
+    total_floors INTEGER,
+    building_type TEXT,
+    building_year INTEGER,
+    ceiling_height NUMERIC(5, 2),
+    bathroom TEXT,
+
+    city TEXT,
+    address TEXT,
+    full_address TEXT,
+    latitude NUMERIC(12, 8),
+    longitude NUMERIC(12, 8),
+
+    owner_name TEXT,
+    user_type TEXT,
+    owner_is_owner BOOLEAN,
+    owner_is_pro BOOLEAN,
+    owner_is_complex BOOLEAN,
+    owner_is_builder BOOLEAN,
+
+    category_alias TEXT,
+    category_label TEXT,
+    complex_id BIGINT,
+    complex_name TEXT,
+    is_layout BOOLEAN,
+
+    photo_count INTEGER,
+    main_photo_url TEXT,
+
+    created_at_krisha DATE,
+    added_at_krisha DATE,
+    days_in_live INTEGER,
+
+    run_id TEXT,
+    parser_version TEXT DEFAULT 'v1',
+    content_hash TEXT,
+
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    parsed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    advert_json JSONB,
+    advert_card_json JSONB,
+    photos_json JSONB
+);
