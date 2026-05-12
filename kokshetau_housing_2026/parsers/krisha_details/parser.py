@@ -31,8 +31,11 @@ class KrishaDetailsParser:
         self.storage.create_parse_run(run_id, pages_requested=len(detail_urls))
 
         records: list[dict[str, Any]] = []
+        pending_records: list[dict[str, Any]] = []
         pages_parsed = 0
         records_failed = 0
+        inserted_total = 0
+        updated_total = 0
 
         try:
             for detail_url in detail_urls:
@@ -51,11 +54,24 @@ class KrishaDetailsParser:
                         run_id=run_id,
                     )
                     records.append(record)
+                    pending_records.append(record)
                     pages_parsed += 1
+
+                    if len(pending_records) >= self.config.save_batch_size:
+                        inserted, updated = self.flush_records(pending_records)
+                        inserted_total += inserted
+                        updated_total += updated
+                        pending_records.clear()
 
                 except Exception:
                     records_failed += 1
                     logger.exception("Detail page failed url=%s. Continuing.", detail_url)
+
+            if pending_records:
+                inserted, updated = self.flush_records(pending_records)
+                inserted_total += inserted
+                updated_total += updated
+                pending_records.clear()
 
             quality_report = validate_records(records)
             logger.info("Quality report: %s", json.dumps(quality_report, ensure_ascii=False))
@@ -63,7 +79,6 @@ class KrishaDetailsParser:
             if quality_report["issues_count"] > 0:
                 logger.warning("Validation issues found: %s", quality_report["issues_count"])
 
-            inserted, updated = self.storage.save_records(records)
             status = "success" if records_failed == 0 else "partial_success"
 
             self.storage.finish_parse_run(
@@ -71,8 +86,8 @@ class KrishaDetailsParser:
                 status=status,
                 pages_parsed=pages_parsed,
                 records_found=len(records),
-                records_inserted=inserted,
-                records_updated=updated,
+                records_inserted=inserted_total,
+                records_updated=updated_total,
                 records_failed=records_failed,
             )
 
@@ -82,24 +97,41 @@ class KrishaDetailsParser:
                 status,
                 len(detail_urls),
                 len(records),
-                inserted,
-                updated,
+                inserted_total,
+                updated_total,
                 records_failed,
             )
 
         except Exception as error:
             logger.exception("Details pipeline failed")
 
+            if pending_records:
+                try:
+                    inserted, updated = self.flush_records(pending_records)
+                    inserted_total += inserted
+                    updated_total += updated
+                except Exception:
+                    logger.exception("Failed to save remaining buffered records")
+
             self.storage.finish_parse_run(
                 run_id=run_id,
                 status="failed",
                 pages_parsed=pages_parsed,
                 records_found=len(records),
-                records_inserted=0,
-                records_updated=0,
+                records_inserted=inserted_total,
+                records_updated=updated_total,
                 records_failed=records_failed,
                 error_message=str(error),
             )
 
             raise
 
+    def flush_records(self, records: list[dict[str, Any]]) -> tuple[int, int]:
+        inserted, updated = self.storage.save_records(records)
+        logger.info(
+            "Saved details batch records=%s inserted=%s updated=%s",
+            len(records),
+            inserted,
+            updated,
+        )
+        return inserted, updated

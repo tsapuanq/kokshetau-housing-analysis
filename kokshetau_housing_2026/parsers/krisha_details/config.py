@@ -14,6 +14,7 @@ class KrishaDetailsConfig:
     url_batch_size: int = 500
     existing_ads_batch_size: int = 200
     insert_batch_size: int = 200
+    save_batch_size: int = 100
 
 
 KOKSHETAU_DETAILS_CONFIG = KrishaDetailsConfig()
@@ -69,4 +70,3 @@ DETAIL_COLUMNS = [
     "advert_card_json",
     "photos_json",
 ]
-
